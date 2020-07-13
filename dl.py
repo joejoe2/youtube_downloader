@@ -1,64 +1,60 @@
-from pytube import YouTube
+from pytube import YouTube, Stream
 import subprocess
+import os
 
 root = ""
 
 
-class yt_downloader:
-    def __init__(self):
-        self.file_size = -1
-        self.pre = 0
+def start(url: str, onprog=None):
+    try:
+        yt = YouTube(url)
+        vlist = yt.streams.filter(subtype='mp4', only_video=True).order_by('resolution').desc()
+        alist = yt.streams.filter(subtype='mp4', only_audio=True).order_by('bitrate').desc()
+    except KeyError:
+        return "unavailable"
 
-    def download(self, target, outname, ext):
-        self.file_size = target.filesize
+    print(vlist)
+    print(alist)
 
-        print("download start " + "tmp/" + outname + ext)
+    if alist.__len__()==0 or vlist==0:
+        return "unavailable a or v"
 
-        s = str(outname).replace("/", " ").replace("\\", " ").replace("*", " ").replace(":", " ") \
-            .replace("?", " ").replace("\"", " ").replace("<", " ").replace(">", " ").replace("|", " ")
-        target.download("tmp/", filename=s)
-        print("download finish " + "tmp/" + s)
-        return "tmp\\" + s + ext
-        pass
+    yt.register_on_progress_callback(onprog)
 
-    def merge(self, audio, video, ffmpeg=root + "lib\\bin\\ffmpeg", out=root + "tmp\\out.mp4"):
-        c = [ffmpeg, " -i ", "\"" + video + "\"", " -i ", "\"" + audio + "\"", "-c:v", "copy", "-c:a", "aac", "-strict",
-             "experimental", "\"" + out + "\""]
-        c = ffmpeg + ' -i "' + video + '"' + ' -i "' + audio + '"' + ' -c:v copy -c:a aac -strict experimental "' + out + '"'
-        p = subprocess.check_output(c, shell=True)
-        pass
+    original_name = yt.player_config_args['title']
+    if original_name == 'YouTube':
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(yt.watch_html, 'lxml')
+        original_name = soup.findAll("meta", attrs={'name': 'title'}, recursive=True)[0]['content']
 
-    def find(self, url, opt="mp4 best v+a", progressor=None):
-        yt = YouTube(url, on_progress_callback=self.outer(progressor))
-        title = yt.title
-        if opt == "mp4 best v+a":
-            return title, [yt.streams.filter(adaptive=True, file_extension="mp4").first(),
-                           yt.streams.filter(only_audio=True, file_extension="mp4").first()]
-            pass
-        elif opt == "mp4 best a":
-            return title, [yt.streams.filter(only_audio=True, file_extension="mp4").first()]
-            pass
-        elif opt == "mp4 best v":
-            return title, [yt.streams.filter(adaptive=True, file_extension="mp4").first()]
-            pass
-        elif opt == "mp4 v+a":
-            return title, [yt.streams.filter(progressive=True, file_extension="mp4").first()]
-            pass
+    original_name: str
+    original_name = original_name.replace(":", '').replace(".", '').replace("-", '')
+    print(original_name)
 
-    def outer(self, progressor=None):
-        def plog(stream=None, chunk=None, file_handle=None, remaining=None):
-            nonlocal progressor
-            # Gets the percentage of the file that has been downloaded.
-            percent = int((100 * (self.file_size - remaining)) / self.file_size)
-            if percent < 0:
-                percent = 0
-            elif not int(percent) == int(self.pre):
-                if progressor == None:
-                    print("{:00.0f}% downloaded".format(percent))
-                else:
-                    progressor.setprogress(percent)
-                    pass
-                self.pre = percent
+    tmp = str(abs(original_name.__hash__()))
 
-        return plog
-        pass
+    print("audio:")
+    alist[0].download("tmp\\", filename=tmp + 'a')
+    print("video:")
+    vlist[0].download("tmp\\", filename=tmp + 'v')
+
+    try:
+        merge("tmp\\" + tmp + 'a.mp4', "tmp\\" + tmp + 'v.mp4', out=root + "tmp\\" + tmp + ".mp4")
+        os.remove("tmp\\" + tmp + 'a.mp4')
+        os.remove("tmp\\" + tmp + 'v.mp4')
+        os.replace("tmp\\" + tmp + ".mp4", "tmp\\" + original_name + ".mp4")
+    except Exception:
+        return "invalid file"
+
+    return "done"
+
+
+def merge(audio, video, ffmpeg=root + "lib\\bin\\ffmpeg", out=root + "tmp\\out.mp4"):
+    c = [ffmpeg, " -i ", "\"" + video + "\"", " -i ", "\"" + audio + "\"", "-c:v", "copy", "-c:a", "aac", "-strict",
+         "experimental", "\"" + out + "\""]
+    c = ffmpeg + ' -i "' + video + '"' + ' -i "' + audio + '"' + ' -c:v copy -c:a aac -strict experimental "' + out + '"'
+    p = subprocess.check_output(c, shell=True)
+    pass
+
+
+
