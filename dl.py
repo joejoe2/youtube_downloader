@@ -21,6 +21,23 @@ def start(url: str, onprog=None):
 
     yt.register_on_progress_callback(onprog)
 
+    if 'title' not in yt.player_config_args:
+        # for more reliability when parsing, we may use a trained parser
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(yt.watch_html, 'lxml')
+            title = soup.title.get_text().strip()
+        except ModuleNotFoundError:
+            # since this parsing is actually pretty simple, we may just
+            # parse it using index()
+            i_start = yt.watch_html.lower().index('<title>') + len('<title>')
+            i_end = yt.watch_html.lower().index('</title>')
+            title = yt.watch_html[i_start:i_end].strip()
+        # remove the ' - youtube' part that is added to the browser tab's title
+        index = title.lower().rfind(' - youtube')
+        title = title[:index] if index > 0 else title
+        yt.player_config_args['title'] = title
+
     original_name = yt.player_config_args['title']
     if original_name == 'YouTube':
         from bs4 import BeautifulSoup
